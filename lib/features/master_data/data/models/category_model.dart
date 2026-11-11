@@ -1,5 +1,5 @@
 import '../../domain/entities/category.dart';
-import 'model_parsers.dart';
+import '../../../../core/database/sql_parsers.dart';
 
 /// Representasi baris tabel `categories` di layer data.
 ///

@@ -1,4 +1,4 @@
-/// Helper kecil untuk membaca nilai kolom SQLite dengan aman.
+/// Helper pembacaan kolom SQLite yang dipakai bersama oleh seluruh fitur.
 ///
 /// SQLite (lewat sqflite) mengembalikan `int`, `double`, `String`, atau `null`.
 /// Casting langsung seperti `map['price'] as int` bisa melempar error bila

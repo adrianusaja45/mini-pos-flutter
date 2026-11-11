@@ -1,5 +1,5 @@
 import '../../domain/entities/product.dart';
-import 'model_parsers.dart';
+import '../../../../core/database/sql_parsers.dart';
 
 /// Representasi baris tabel `products` (di-JOIN dengan `categories`).
 class ProductModel {

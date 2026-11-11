@@ -16,9 +16,13 @@ class ReceiptItem extends Equatable {
     this.addons = const <ReceiptAddon>[],
   });
 
-  /// Id produk asal (bisa `null` bila produk dihapus; di sini tetap int karena
-  /// checkout selalu memakai produk yang ada saat transaksi).
-  final int productId;
+  /// Id produk asal saat transaksi.
+  ///
+  /// Nilainya boleh `null` karena kolom `transaction_items.product_id` memakai
+  /// `ON DELETE SET NULL`. Saat master produk dihapus, baris riwayat tetap ada
+  /// dan struk tetap tampil memakai kolom snapshot di bawah. Artinya struk
+  /// historis TIDAK bergantung pada master produk.
+  final int? productId;
 
   /// Nama produk yang tercetak di struk.
   final String productName;

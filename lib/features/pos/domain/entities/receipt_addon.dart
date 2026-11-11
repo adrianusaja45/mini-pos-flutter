@@ -14,7 +14,11 @@ class ReceiptAddon extends Equatable {
   });
 
   /// Id master add-on saat transaksi (boleh sudah tidak aktif sekarang).
-  final int addonId;
+  ///
+  /// Bisa `null` karena `transaction_item_addons.addon_id` memakai
+  /// `ON DELETE SET NULL`; nama & harga add-on tetap dibaca dari kolom snapshot
+  /// sehingga struk lama tidak rusak saat master add-on dihapus.
+  final int? addonId;
 
   /// Nama add-on yang tercetak di struk (snapshot).
   final String name;

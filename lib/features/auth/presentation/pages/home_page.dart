@@ -4,13 +4,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/auth_session.dart';
 import '../../../master_data/presentation/pages/master_data_page.dart';
 import '../../../pos/presentation/pages/pos_page.dart';
+import '../../../report/presentation/pages/report_page.dart';
 import '../cubit/session_cubit.dart';
 
 /// Halaman Home setelah kasir berhasil login.
 ///
-/// Halaman ini menjadi pintu masuk dua fitur utama:
+/// Halaman ini menjadi pintu masuk tiga fitur utama:
 /// 1. Layar Kasir (POS) untuk memilih produk dan menyiapkan keranjang.
 /// 2. Master Data untuk mengelola kategori, produk, dan add-on.
+/// 3. Laporan Penjualan untuk melihat ringkasan, riwayat, dan struk historis.
 ///
 /// Identitas kasir ditampilkan agar pengguna yakin sedang memakai akun yang
 /// benar sebelum mulai bertransaksi.
@@ -178,6 +180,39 @@ class HomePage extends StatelessWidget {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const MasterDataPage()),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Pintu masuk fitur laporan. Diletakkan di Home agar kasir bisa
+            // memeriksa pendapatan dan membuka kembali struk transaksi lama
+            // tanpa masuk ke layar kasir.
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
+                leading: CircleAvatar(
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                  child: Icon(
+                    Icons.bar_chart_rounded,
+                    color: theme.colorScheme.onSecondaryContainer,
+                  ),
+                ),
+                title: const Text(
+                  'Laporan Penjualan',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  'Ringkasan pendapatan, riwayat, dan struk transaksi',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ReportPage()),
                   );
                 },
               ),

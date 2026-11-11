@@ -1,5 +1,5 @@
 import '../../domain/entities/addon.dart';
-import 'model_parsers.dart';
+import '../../../../core/database/sql_parsers.dart';
 
 /// Representasi baris tabel `addons` di layer data.
 class AddonModel {

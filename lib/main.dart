@@ -16,6 +16,8 @@ import 'features/master_data/data/repositories/master_data_repository_impl.dart'
 import 'features/master_data/domain/repositories/master_data_repository.dart';
 import 'features/pos/data/repositories/pos_repository_impl.dart';
 import 'features/pos/domain/repositories/pos_repository.dart';
+import 'features/report/data/repositories/report_repository_impl.dart';
+import 'features/report/domain/repositories/report_repository.dart';
 
 /// Titik masuk aplikasi.
 ///
@@ -51,11 +53,17 @@ Future<void> main() async {
   // dari sesi login yang sedang aktif.
   final posRepository = PosRepositoryImpl(masterDataRepository, authRepository);
 
+  // Repository laporan hanya membaca tabel transaksi (snapshot), sehingga
+  // tidak membutuhkan repository master data. Dengan begitu laporan tetap
+  // benar walau produk/add-on diubah atau dihapus.
+  final reportRepository = ReportRepositoryImpl();
+
   runApp(
     PosApp(
       authRepository: authRepository,
       masterDataRepository: masterDataRepository,
       posRepository: posRepository,
+      reportRepository: reportRepository,
     ),
   );
 }
@@ -67,6 +75,7 @@ class PosApp extends StatelessWidget {
     required this.authRepository,
     required this.masterDataRepository,
     required this.posRepository,
+    required this.reportRepository,
   });
 
   /// Repository autentikasi yang dipakai seluruh halaman auth.
@@ -77,6 +86,9 @@ class PosApp extends StatelessWidget {
 
   /// Repository katalog untuk layar kasir (POS).
   final PosRepository posRepository;
+
+  /// Repository laporan penjualan (ringkasan, riwayat, struk historis).
+  final ReportRepository reportRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +101,7 @@ class PosApp extends StatelessWidget {
           value: masterDataRepository,
         ),
         RepositoryProvider<PosRepository>.value(value: posRepository),
+        RepositoryProvider<ReportRepository>.value(value: reportRepository),
       ],
       child: BlocProvider(
         // SessionCubit langsung memeriksa sesi tersimpan saat aplikasi start.
