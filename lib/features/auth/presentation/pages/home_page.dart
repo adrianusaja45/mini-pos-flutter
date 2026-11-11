@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/auth_session.dart';
+import '../../../master_data/presentation/pages/master_data_page.dart';
 import '../cubit/session_cubit.dart';
 
 /// Halaman Home **dummy** setelah kasir berhasil login.
@@ -116,6 +117,36 @@ class HomePage extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Pintu masuk fitur master data. Diletakkan di Home agar kasir
+            // dapat mengelola katalog tanpa harus masuk ke halaman transaksi.
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
+                leading: CircleAvatar(
+                  backgroundColor: theme.colorScheme.tertiaryContainer,
+                  child: Icon(
+                    Icons.inventory_2_outlined,
+                    color: theme.colorScheme.onTertiaryContainer,
+                  ),
+                ),
+                title: const Text(
+                  'Master Data',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text('Kelola kategori, produk, dan add-on'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const MasterDataPage()),
+                  );
+                },
               ),
             ),
             const SizedBox(height: 16),

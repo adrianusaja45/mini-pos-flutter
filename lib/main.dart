@@ -8,6 +8,12 @@ import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/domain/repositories/auth_repository.dart';
 import 'features/auth/presentation/cubit/session_cubit.dart';
 import 'features/auth/presentation/pages/auth_gate.dart';
+import 'features/master_data/data/datasources/addon_local_data_source.dart';
+import 'features/master_data/data/datasources/category_local_data_source.dart';
+import 'features/master_data/data/datasources/product_image_storage.dart';
+import 'features/master_data/data/datasources/product_local_data_source.dart';
+import 'features/master_data/data/repositories/master_data_repository_impl.dart';
+import 'features/master_data/domain/repositories/master_data_repository.dart';
 
 /// Titik masuk aplikasi.
 ///
@@ -28,22 +34,48 @@ Future<void> main() async {
     localDataSource: AuthLocalDataSource(),
   );
 
-  runApp(PosApp(authRepository: authRepository));
+  // Repository master data memakai koneksi SQLite yang sama. ProductImageStorage
+  // bertugas menyalin foto ke Application Documents Directory.
+  final masterDataRepository = MasterDataRepositoryImpl(
+    categoryDataSource: CategoryLocalDataSource(),
+    productDataSource: ProductLocalDataSource(),
+    addonDataSource: AddonLocalDataSource(),
+    imageStorage: ProductImageStorage(),
+  );
+
+  runApp(
+    PosApp(
+      authRepository: authRepository,
+      masterDataRepository: masterDataRepository,
+    ),
+  );
 }
 
 /// Widget akar aplikasi.
 class PosApp extends StatelessWidget {
-  const PosApp({super.key, required this.authRepository});
+  const PosApp({
+    super.key,
+    required this.authRepository,
+    required this.masterDataRepository,
+  });
 
   /// Repository autentikasi yang dipakai seluruh halaman auth.
   final AuthRepository authRepository;
 
+  /// Repository master data (kategori, produk, add-on) untuk fitur master data.
+  final MasterDataRepository masterDataRepository;
+
   @override
   Widget build(BuildContext context) {
     // RepositoryProvider membuat repository dapat diambil dari widget mana pun
-    // dengan `context.read<AuthRepository>()`.
-    return RepositoryProvider<AuthRepository>.value(
-      value: authRepository,
+    // dengan `context.read<...>()`.
+    return MultiRepositoryProvider(
+      providers: [
+        RepositoryProvider<AuthRepository>.value(value: authRepository),
+        RepositoryProvider<MasterDataRepository>.value(
+          value: masterDataRepository,
+        ),
+      ],
       child: BlocProvider(
         // SessionCubit langsung memeriksa sesi tersimpan saat aplikasi start.
         // Selama proses ini berjalan, AuthGate menampilkan Splash Screen.
