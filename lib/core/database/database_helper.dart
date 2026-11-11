@@ -37,7 +37,11 @@ class DatabaseHelper {
   ///
   /// Setiap kali struktur tabel berubah, naikkan angka ini dan tambahkan
   /// langkah migrasinya di [_onUpgrade] agar data pengguna tidak hilang.
-  static const int databaseVersion = 1;
+  ///
+  /// Riwayat versi:
+  /// - 1: tabel pengguna, kategori, produk, add-on, dan transaksi.
+  /// - 2: menambah tabel `user_sessions` untuk menyimpan sesi login kasir.
+  static const int databaseVersion = 2;
 
   /// Path alternatif khusus pengujian (misal `inMemoryDatabasePath`).
   ///
@@ -129,6 +133,7 @@ class DatabaseHelper {
   /// `transactions`) harus ada sebelum tabel anak yang memiliki FOREIGN KEY.
   Future<void> _onCreate(Database db, int version) async {
     await db.execute(_createUsersTable);
+    await db.execute(_createUserSessionsTable);
     await db.execute(_createCategoriesTable);
     await db.execute(_createProductsTable);
     await db.execute(_createAddonsTable);
@@ -145,12 +150,17 @@ class DatabaseHelper {
 
   /// Menangani perubahan skema pada versi aplikasi berikutnya.
   ///
-  /// Belum ada migrasi karena versi skema masih 1. Pola yang disarankan:
-  /// jika `oldVersion < 2` jalankan `ALTER TABLE ...`, lalu tambah kondisi
-  /// berikutnya secara berurutan.
+  /// Migrasi dijalankan dari versi lama menuju versi terbaru secara berurutan,
+  /// sehingga pengguna yang memperbarui aplikasi tetap memakai database lama
+  /// tanpa kehilangan data.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // Versi 2 menambahkan tabel sesi login kasir.
+    if (oldVersion < 2) {
+      await db.execute(_createUserSessionsTable);
+    }
+
     // Contoh pola migrasi di masa depan:
-    // if (oldVersion < 2) {
+    // if (oldVersion < 3) {
     //   await db.execute('ALTER TABLE products ADD COLUMN barcode TEXT');
     // }
   }
@@ -182,6 +192,35 @@ class DatabaseHelper {
       password_hash TEXT NOT NULL,
       -- Waktu pembuatan akun, format ISO-8601 UTC agar mudah diurutkan.
       created_at TEXT NOT NULL
+    )
+  ''';
+
+  /// Tabel sesi login kasir yang sedang aktif.
+  ///
+  /// Mengapa memakai tabel, bukan variabel di memori?
+  /// - Sesi harus tetap ada setelah aplikasi ditutup, sehingga kasir tidak
+  ///   perlu login ulang setiap membuka aplikasi.
+  /// - `CHECK (id = 1)` memastikan tabel hanya boleh berisi satu baris, jadi
+  ///   mustahil ada dua kasir aktif sekaligus di satu perangkat.
+  ///
+  /// `user_name` dan `username` sengaja disalin (snapshot) agar halaman Home
+  /// bisa langsung menampilkan identitas kasir tanpa query tambahan.
+  static const String _createUserSessionsTable = '''
+    CREATE TABLE ${DbTables.userSessions} (
+      -- Selalu bernilai 1: kunci agar hanya ada satu sesi aktif.
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      -- Akun kasir yang sedang login. ON DELETE CASCADE menghapus sesi
+      -- otomatis bila akun tersebut dihapus dari tabel users.
+      user_id INTEGER NOT NULL,
+      -- Salinan nama lengkap kasir untuk ditampilkan di Home/struk.
+      user_name TEXT NOT NULL,
+      -- Salinan username kasir (huruf kecil) untuk ditampilkan di Home.
+      username TEXT NOT NULL,
+      -- Waktu login terakhir (ISO-8601 UTC).
+      logged_in_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES ${DbTables.users} (id)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
     )
   ''';
 

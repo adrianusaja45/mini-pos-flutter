@@ -12,6 +12,10 @@ class DbTables {
   /// Menyimpan akun kasir/admin beserta kredensial login.
   static const String users = 'users';
 
+  /// Menyimpan satu sesi kasir yang sedang aktif (hanya boleh berisi 1 baris).
+  /// Dipakai fitur auth agar kasir tidak perlu login ulang saat aplikasi dibuka.
+  static const String userSessions = 'user_sessions';
+
   /// Menyimpan kategori produk (misal: Makanan, Minuman).
   static const String categories = 'categories';
 
@@ -42,6 +46,13 @@ class DbColumns {
   static const String id = 'id';
   static const String name = 'name';
   static const String createdAt = 'created_at';
+
+  // Akun & sesi pengguna
+  static const String username = 'username';
+  static const String passwordHash = 'password_hash';
+  static const String userId = 'user_id';
+  static const String userName = 'user_name';
+  static const String loggedInAt = 'logged_in_at';
 
   // Produk & add-on
   static const String categoryId = 'category_id';
