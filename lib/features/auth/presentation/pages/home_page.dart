@@ -3,14 +3,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/auth_session.dart';
 import '../../../master_data/presentation/pages/master_data_page.dart';
+import '../../../pos/presentation/pages/pos_page.dart';
 import '../cubit/session_cubit.dart';
 
-/// Halaman Home **dummy** setelah kasir berhasil login.
+/// Halaman Home setelah kasir berhasil login.
 ///
-/// Halaman ini sengaja masih sederhana karena fitur POS (katalog, keranjang,
-/// pembayaran) akan dibuat pada tahap berikutnya. Tujuannya saat ini:
-/// 1. Membuktikan alur login & sesi berjalan (nama kasir tampil).
-/// 2. Menyediakan tombol Logout untuk menguji penghapusan sesi.
+/// Halaman ini menjadi pintu masuk dua fitur utama:
+/// 1. Layar Kasir (POS) untuk memilih produk dan menyiapkan keranjang.
+/// 2. Master Data untuk mengelola kategori, produk, dan add-on.
+///
+/// Identitas kasir ditampilkan agar pengguna yakin sedang memakai akun yang
+/// benar sebelum mulai bertransaksi.
 class HomePage extends StatelessWidget {
   const HomePage({super.key, required this.session});
 
@@ -120,6 +123,36 @@ class HomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            // Pintu masuk utama: layar kasir untuk memulai transaksi.
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+                leading: CircleAvatar(
+                  backgroundColor: theme.colorScheme.primaryContainer,
+                  child: Icon(
+                    Icons.point_of_sale_outlined,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                title: const Text(
+                  'Layar Kasir (POS)',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: const Text(
+                  'Pilih produk, atur keranjang, dan cek sisa stok',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context)
+                      .push(MaterialPageRoute(builder: (_) => const PosPage()));
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
             // Pintu masuk fitur master data. Diletakkan di Home agar kasir
             // dapat mengelola katalog tanpa harus masuk ke halaman transaksi.
             Card(
@@ -147,38 +180,6 @@ class HomePage extends StatelessWidget {
                     MaterialPageRoute(builder: (_) => const MasterDataPage()),
                   );
                 },
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.shopping_cart_outlined,
-                      size: 56,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'Halaman POS (dummy)',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Katalog produk, keranjang, dan pembayaran akan dibuat '
-                      'pada tahap berikutnya. Saat ini halaman ini hanya '
-                      'menandakan bahwa sesi kasir berhasil tersimpan.',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
               ),
             ),
           ],

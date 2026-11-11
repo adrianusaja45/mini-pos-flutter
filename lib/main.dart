@@ -14,6 +14,8 @@ import 'features/master_data/data/datasources/product_image_storage.dart';
 import 'features/master_data/data/datasources/product_local_data_source.dart';
 import 'features/master_data/data/repositories/master_data_repository_impl.dart';
 import 'features/master_data/domain/repositories/master_data_repository.dart';
+import 'features/pos/data/repositories/pos_repository_impl.dart';
+import 'features/pos/domain/repositories/pos_repository.dart';
 
 /// Titik masuk aplikasi.
 ///
@@ -43,10 +45,15 @@ Future<void> main() async {
     imageStorage: ProductImageStorage(),
   );
 
+  // Repository POS membungkus repository master data. Dengan begitu katalog
+  // kasir membaca produk & add-on aktif yang sama tanpa query SQL duplikat.
+  final posRepository = PosRepositoryImpl(masterDataRepository);
+
   runApp(
     PosApp(
       authRepository: authRepository,
       masterDataRepository: masterDataRepository,
+      posRepository: posRepository,
     ),
   );
 }
@@ -57,6 +64,7 @@ class PosApp extends StatelessWidget {
     super.key,
     required this.authRepository,
     required this.masterDataRepository,
+    required this.posRepository,
   });
 
   /// Repository autentikasi yang dipakai seluruh halaman auth.
@@ -64,6 +72,9 @@ class PosApp extends StatelessWidget {
 
   /// Repository master data (kategori, produk, add-on) untuk fitur master data.
   final MasterDataRepository masterDataRepository;
+
+  /// Repository katalog untuk layar kasir (POS).
+  final PosRepository posRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +86,7 @@ class PosApp extends StatelessWidget {
         RepositoryProvider<MasterDataRepository>.value(
           value: masterDataRepository,
         ),
+        RepositoryProvider<PosRepository>.value(value: posRepository),
       ],
       child: BlocProvider(
         // SessionCubit langsung memeriksa sesi tersimpan saat aplikasi start.
