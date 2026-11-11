@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mini_pos_offline/features/pos/domain/entities/discount_type.dart';
 import 'package:mini_pos_offline/features/pos/domain/entities/pos_addon.dart';
 import 'package:mini_pos_offline/features/pos/domain/entities/pos_product.dart';
 import 'package:mini_pos_offline/features/pos/presentation/cubit/cart_cubit.dart';
@@ -198,5 +199,88 @@ void main() {
     final result = cubit.addProduct(product: kopiSusu, quantity: 0);
     expect(result.isSuccess, isFalse);
     expect(cubit.state.isEmpty, isTrue);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Proteksi diskon (Tahap 5)
+  // ---------------------------------------------------------------------------
+
+  test('diskon persentase maksimal 100%', () {
+    final cubit = CartCubit();
+    cubit.addProduct(product: kopiSusu); // 18.000
+
+    final rejected = cubit.applyDiscount(
+      type: DiscountType.percentage,
+      value: 150,
+    );
+    expect(rejected.isSuccess, isFalse);
+    expect(rejected.message, contains('tidak boleh melebihi 100'));
+    // State tidak berubah saat validasi gagal.
+    expect(cubit.state.discountType, DiscountType.none);
+    expect(cubit.state.discountAmount, 0);
+    expect(cubit.state.totalAmount, 18000);
+
+    // Tepat 100% sah dan menghasilkan total nol (bukan minus).
+    expect(
+      cubit.applyDiscount(type: DiscountType.percentage, value: 100).isSuccess,
+      isTrue,
+    );
+    expect(cubit.state.discountAmount, 18000);
+    expect(cubit.state.totalAmount, 0);
+  });
+
+  test('diskon nominal tidak boleh melebihi subtotal', () {
+    final cubit = CartCubit();
+    cubit.addProduct(product: kopiSusu); // 18.000
+
+    final rejected = cubit.applyDiscount(
+      type: DiscountType.nominal,
+      value: 18001,
+    );
+    expect(rejected.isSuccess, isFalse);
+    expect(rejected.message, contains('tidak boleh melebihi'));
+    expect(cubit.state.discountValue, 0);
+    expect(cubit.state.totalAmount, 18000);
+  });
+
+  test('total tetap tidak minus saat item dikurangi setelah diskon nominal', () {
+    const produkStokBanyak = PosProduct(
+      id: 3,
+      categoryId: 1,
+      categoryName: 'Minuman',
+      name: 'Teh',
+      price: 18000,
+      stock: 10,
+    );
+    final cubit = CartCubit();
+
+    cubit.addProduct(product: produkStokBanyak, quantity: 2); // 36.000
+    expect(
+      cubit.applyDiscount(type: DiscountType.nominal, value: 30000).isSuccess,
+      isTrue,
+    );
+    expect(cubit.state.totalAmount, 6000);
+
+    // Subtotal turun menjadi 18.000, lebih kecil dari diskon nominal 30.000.
+    cubit.decreaseQuantity(cubit.state.items.single.signature);
+
+    expect(cubit.state.subtotal, 18000);
+    // Nominal diskon otomatis dijepit agar total tidak negatif.
+    expect(cubit.state.discountAmount, 18000);
+    expect(cubit.state.totalAmount, 0);
+    expect(cubit.state.isDiscountClamped, isTrue);
+  });
+
+  test('diskon dihapus saat keranjang dikosongkan', () {
+    final cubit = CartCubit();
+    cubit.addProduct(product: kopiSusu);
+    cubit.applyDiscount(type: DiscountType.percentage, value: 10);
+
+    cubit.clear();
+
+    expect(cubit.state.isEmpty, isTrue);
+    expect(cubit.state.discountType, DiscountType.none);
+    expect(cubit.state.discountValue, 0);
+    expect(cubit.state.totalAmount, 0);
   });
 }

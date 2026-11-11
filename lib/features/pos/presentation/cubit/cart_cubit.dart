@@ -2,8 +2,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/cart_addon.dart';
 import '../../domain/entities/cart_item.dart';
+import '../../domain/entities/discount_type.dart';
 import '../../domain/entities/pos_addon.dart';
 import '../../domain/entities/pos_product.dart';
+import '../../domain/services/discount_calculator.dart';
 import 'cart_state.dart';
 
 /// Hasil satu operasi keranjang.
@@ -28,12 +30,16 @@ class CartMutationResult {
   final String? message;
 }
 
-/// Cubit keranjang kasir beserta **Shared Stock Validation**.
+/// Cubit keranjang kasir beserta **Shared Stock Validation** dan
+/// **Proteksi Diskon**.
 ///
 /// Cubit ini sengaja tidak menyentuh SQLite: seluruh data yang dibutuhkan
 /// (harga & stok) dibawa oleh [PosProduct]/[PosAddon] dan disalin sebagai
 /// snapshot ke [CartItem]. Dengan begitu, menambah/mengurangi quantity tidak
 /// pernah memicu query database sehingga layar kasir tetap responsif.
+///
+/// Penyimpanan transaksi ke SQLite dilakukan oleh `CheckoutCubit` lewat
+/// repository, bukan oleh Cubit ini.
 class CartCubit extends Cubit<CartState> {
   CartCubit() : super(const CartState());
 
@@ -144,7 +150,7 @@ class CartCubit extends Cubit<CartState> {
       );
     }
 
-    emit(state.copyWith(items: updatedItems, clearError: true));
+    _commitItems(updatedItems);
     return const CartMutationResult.success();
   }
 
@@ -176,7 +182,7 @@ class CartCubit extends Cubit<CartState> {
 
     final updatedItems = List<CartItem>.from(state.items);
     updatedItems[index] = item.copyWith(quantity: item.quantity + 1);
-    emit(state.copyWith(items: updatedItems, clearError: true));
+    _commitItems(updatedItems);
     return const CartMutationResult.success();
   }
 
@@ -199,7 +205,7 @@ class CartCubit extends Cubit<CartState> {
       updatedItems[index] = item.copyWith(quantity: item.quantity - 1);
     }
 
-    emit(state.copyWith(items: updatedItems, clearError: true));
+    _commitItems(updatedItems);
     return const CartMutationResult.success();
   }
 
@@ -209,13 +215,15 @@ class CartCubit extends Cubit<CartState> {
         .where((item) => item.signature != signature)
         .toList(growable: false);
     if (updatedItems.length == state.items.length) return;
-    emit(state.copyWith(items: updatedItems, clearError: true));
+    _commitItems(updatedItems);
   }
 
-  /// Mengosongkan seluruh keranjang (mis. kasir membatalkan transaksi).
+  /// Mengosongkan seluruh keranjang (mis. kasir membatalkan transaksi atau
+  /// menekan "Selesai" setelah struk ditampilkan).
   void clear() {
     if (state.isEmpty) return;
-    // State baru tanpa items juga otomatis menghapus pesan kesalahan lama.
+    // State baru tanpa items juga otomatis menghapus diskon & pesan lama,
+    // karena transaksi berikutnya harus dimulai dari nol.
     emit(const CartState());
   }
 
@@ -226,12 +234,140 @@ class CartCubit extends Cubit<CartState> {
     }
   }
 
+  // ===========================================================================
+  // PROTEKSI DISKON
+  // ===========================================================================
+  //
+  // ATURAN BISNIS yang WAJIB dijaga:
+  // 1. Diskon persentase maksimal 100%.
+  // 2. Diskon nominal tidak boleh melebihi subtotal belanja.
+  // 3. Total akhir tidak boleh minus (< 0).
+  //
+  // MENGAPA validasi dilakukan di Cubit, bukan hanya di UI?
+  // - UI (form diskon) memang memvalidasi agar tombol "Terapkan" tidak bisa
+  //   ditekan untuk nilai salah. Namun UI bersifat "permintaan"; Cubit adalah
+  //   tempat aturan bisnis ditegakkan. Bila suatu saat ada tombol atau jalur
+  //   lain yang memanggil [applyDiscount], aturan tetap sama.
+  // - Repository juga memvalidasi ulang sebelum menulis ke SQLite (lapisan
+  //   pertahanan ketiga). Jadi ada tiga lapis: UI -> Cubit -> Repository,
+  //   ditambah CHECK constraint di skema database sebagai lapis terakhir.
+  //
+  // MENGAPA total tidak pernah minus?
+  // [CartState.discountAmount] memakai [DiscountCalculator] yang selalu
+  // menjepit nominal diskon pada rentang `0..subtotal`. Dengan begitu total
+  // adalah `subtotal - discountAmount` dan hasilnya tidak mungkin negatif,
+  // bahkan jika kasir memberi diskon nominal besar lalu menghapus sebagian
+  // item dari keranjang (subtotal mengecil).
+  //
+  // CATATAN PENTING soal perubahan isi keranjang:
+  // Diskon yang sudah diterapkan TIDAK dihapus saat quantity berubah. Nominal
+  // diskon persentase otomatis menyesuaikan subtotal baru, sedangkan diskon
+  // nominal yang kini melebihi subtotal akan otomatis dijepit oleh kalkulator.
+  // Perilaku ini dipilih agar kasir tidak kehilangan input diskon hanya karena
+  // salah menekan tombol "-". Bila keranjang menjadi kosong, diskon ikut
+  // direset lewat [clear] / [_commitItems].
+
+  /// Menerapkan diskon pada keranjang.
+  ///
+  /// [type] menentukan cara potong (nominal atau persentase), [value] adalah
+  /// nilainya. Memanggil dengan `type: DiscountType.none` atau `value: 0`
+  /// berarti menghapus diskon.
+  ///
+  /// Mengembalikan [CartMutationResult.failure] berisi alasan bila input tidak
+  /// sah. State TIDAK berubah saat validasi gagal.
+  CartMutationResult applyDiscount({
+    required DiscountType type,
+    required int value,
+  }) {
+    // Validasi tunggal yang juga dipakai UI & repository. Hasilnya berupa
+    // pesan siap tampil atau `null` bila aman.
+    final error = DiscountCalculator.validate(
+      subtotal: state.subtotal,
+      type: type,
+      value: value,
+    );
+    if (error != null) {
+      return _reject(error);
+    }
+
+    // Nilai nol / jenis "none" diperlakukan sebagai permintaan menghapus
+    // diskon, bukan sebagai diskon 0 yang aneh di riwayat transaksi.
+    if (type == DiscountType.none || value <= 0) {
+      emit(
+        state.copyWith(
+          discountType: DiscountType.none,
+          discountValue: 0,
+          clearError: true,
+        ),
+      );
+      return const CartMutationResult.success();
+    }
+
+    emit(
+      state.copyWith(
+        discountType: type,
+        discountValue: value,
+        clearError: true,
+      ),
+    );
+
+    // Pemeriksaan eksplisit sebagai dokumentasi hidup: apa pun input kasir,
+    // state yang dihasilkan tidak boleh menghasilkan total negatif.
+    assert(
+      state.totalAmount >= 0,
+      'Total tagihan tidak boleh minus setelah diskon diterapkan.',
+    );
+
+    return const CartMutationResult.success();
+  }
+
+  /// Menghapus diskon yang sedang aktif tanpa menyentuh item keranjang.
+  void clearDiscount() {
+    if (state.discountType == DiscountType.none &&
+        state.discountValue == 0 &&
+        state.errorMessage == null) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        discountType: DiscountType.none,
+        discountValue: 0,
+        clearError: true,
+      ),
+    );
+  }
+
   /// Mencatat kegagalan ke state (agar tampil di panel keranjang) sekaligus
   /// mengembalikannya ke pemanggil (agar layar katalog bisa menampilkan
   /// snackbar).
   CartMutationResult _reject(String message) {
     emit(state.copyWith(errorMessage: message));
     return CartMutationResult.failure(message);
+  }
+
+  /// Menyimpan daftar item terbaru lalu membersihkan pesan kesalahan lama.
+  ///
+  /// Dipusatkan di satu helper karena semua aksi item (tambah, kurangi, hapus)
+  /// punya kebutuhan yang sama:
+  /// - bila keranjang menjadi kosong, diskon harus ikut direset (state baru),
+  /// - bila masih ada item, diskon yang sudah dipilih dipertahankan.
+  ///
+  /// Pemusatan ini juga memastikan perubahan item tidak pernah "lupa" memakai
+  /// state terbaru, yang bisa membuat diskon menempel pada subtotal lama.
+  void _commitItems(List<CartItem> updatedItems) {
+    if (updatedItems.isEmpty) {
+      // Keranjang kosong: mulai dari state bersih tanpa diskon.
+      if (state.discountType != DiscountType.none ||
+          state.discountValue != 0 ||
+          state.errorMessage != null) {
+        emit(const CartState());
+        return;
+      }
+      emit(state.copyWith(items: updatedItems, clearError: true));
+      return;
+    }
+
+    emit(state.copyWith(items: updatedItems, clearError: true));
   }
 
   // ---------------------------------------------------------------------------

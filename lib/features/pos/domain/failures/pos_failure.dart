@@ -12,6 +12,9 @@ enum PosFailureType {
   /// Validasi stok / input keranjang ditolak.
   validation,
 
+  /// Kegagalan saat menyimpan transaksi (checkout) ke SQLite.
+  checkout,
+
   /// Kegagalan teknis lain yang tidak terduga.
   unknown,
 }

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mini_pos_offline/core/theme/app_theme.dart';
+import 'package:mini_pos_offline/features/pos/domain/entities/checkout_request.dart';
 import 'package:mini_pos_offline/features/pos/domain/entities/pos_addon.dart';
 import 'package:mini_pos_offline/features/pos/domain/entities/pos_catalog.dart';
 import 'package:mini_pos_offline/features/pos/domain/entities/pos_product.dart';
+import 'package:mini_pos_offline/features/pos/domain/entities/transaction_receipt.dart';
 import 'package:mini_pos_offline/features/pos/domain/repositories/pos_repository.dart';
 import 'package:mini_pos_offline/features/pos/presentation/pages/pos_page.dart';
 import 'package:mini_pos_offline/features/pos/presentation/widgets/cart_panel.dart';
@@ -34,6 +36,13 @@ class _FakePosRepository implements PosRepository {
       ],
       addons: [PosAddon(id: 10, name: 'Extra Shot', price: 5000, stock: 5)],
     );
+  }
+
+  @override
+  Future<TransactionReceipt> checkout(CheckoutRequest request) async {
+    // Test pada file ini hanya menguji katalog & keranjang (Tahap 4).
+    // Alur checkout diuji terpisah di level Cubit/repository.
+    throw UnimplementedError('checkout tidak dipakai pada test ini');
   }
 }
 

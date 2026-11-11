@@ -47,7 +47,9 @@ Future<void> main() async {
 
   // Repository POS membungkus repository master data. Dengan begitu katalog
   // kasir membaca produk & add-on aktif yang sama tanpa query SQL duplikat.
-  final posRepository = PosRepositoryImpl(masterDataRepository);
+  // AuthRepository dipakai saat checkout untuk mengambil snapshot nama kasir
+  // dari sesi login yang sedang aktif.
+  final posRepository = PosRepositoryImpl(masterDataRepository, authRepository);
 
   runApp(
     PosApp(

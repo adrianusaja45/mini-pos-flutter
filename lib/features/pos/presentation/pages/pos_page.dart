@@ -15,6 +15,7 @@ import '../widgets/addon_selection_sheet.dart';
 import '../widgets/cart_panel.dart';
 import '../widgets/cart_snackbar.dart';
 import '../widgets/product_catalog_card.dart';
+import 'checkout_page.dart';
 
 /// Layar kasir (POS) untuk memilih produk dan menyiapkan keranjang.
 ///
@@ -22,7 +23,10 @@ import '../widgets/product_catalog_card.dart';
 /// - Layar lebar (>= 900 px): katalog di kiri, panel keranjang menetap di kanan.
 /// - Layar ponsel: katalog penuh, keranjang dibuka lewat bar ringkasan di bawah.
 ///
-/// Tahap ini sengaja berhenti pada keranjang; pembayaran belum dibuat.
+/// Alur transaksi:
+/// katalog -> keranjang (+ diskon) -> halaman pembayaran -> struk digital.
+/// Halaman ini bertindak sebagai pemilik alur navigasi tersebut karena hanya
+/// di sini kedua Cubit (katalog & keranjang) tersedia bersamaan.
 class PosPage extends StatelessWidget {
   const PosPage({super.key});
 
@@ -117,7 +121,10 @@ class _PosViewState extends State<_PosView> {
       children: [
         Expanded(child: catalog),
         const VerticalDivider(width: 1),
-        const SizedBox(width: 360, child: CartPanel()),
+        SizedBox(
+          width: 360,
+          child: CartPanel(onPay: () => _startCheckout(context)),
+        ),
       ],
     );
   }
@@ -349,6 +356,42 @@ class _PosViewState extends State<_PosView> {
   }
 
   // ---------------------------------------------------------------------------
+  // Alur pembayaran
+  // ---------------------------------------------------------------------------
+
+  /// Membuka halaman pembayaran memakai snapshot keranjang saat ini.
+  ///
+  /// Snapshot diambil sekali di awal, sehingga angka yang dibayar sama persis
+  /// dengan yang dilihat kasir saat menekan "Bayar" (walaupun ada perubahan
+  /// state lain di belakang layar).
+  ///
+  /// [finishTransaction] dipanggil setelah transaksi sukses dan saat kasir
+  /// menekan "Selesai" pada struk:
+  /// 1. keranjang dikosongkan agar transaksi tidak bisa dibayar dua kali,
+  /// 2. katalog dimuat ulang karena stok di database sudah berkurang.
+  Future<void> _startCheckout(BuildContext context) async {
+    final cartCubit = context.read<CartCubit>();
+    final cartSnapshot = cartCubit.state;
+
+    // Keranjang kosong tidak boleh masuk halaman pembayaran.
+    if (cartSnapshot.isEmpty) return;
+
+    final catalogCubit = context.read<PosCatalogCubit>();
+
+    void finishTransaction() {
+      cartCubit.clear();
+      catalogCubit.load();
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) =>
+            CheckoutPage(cart: cartSnapshot, onFinish: finishTransaction),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Keranjang mobile
   // ---------------------------------------------------------------------------
 
@@ -360,13 +403,20 @@ class _PosViewState extends State<_PosView> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => FractionallySizedBox(
+      builder: (sheetContext) => FractionallySizedBox(
         heightFactor: 0.85,
         // Route bottom sheet berada di luar pohon widget PosPage, sehingga
         // Cubit dioper ulang memakai BlocProvider.value.
         child: BlocProvider<CartCubit>.value(
           value: cartCubit,
-          child: const CartPanel(),
+          child: CartPanel(
+            onPay: () {
+              // Tutup sheet keranjang lebih dulu agar setelah struk selesai
+              // kasir langsung kembali ke katalog, bukan ke keranjang kosong.
+              Navigator.of(sheetContext).pop();
+              _startCheckout(context);
+            },
+          ),
         ),
       ),
     );
@@ -531,8 +581,12 @@ class _CartSummaryBar extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${state.lineCount} baris • '
-                          '${state.totalQuantity} unit',
+                          state.hasDiscount
+                              ? '${state.lineCount} baris • '
+                                    '${state.totalQuantity} unit • '
+                                    'diskon ${formatRupiah(state.discountAmount)}'
+                              : '${state.lineCount} baris • '
+                                    '${state.totalQuantity} unit',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -543,7 +597,9 @@ class _CartSummaryBar extends StatelessWidget {
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            formatRupiah(state.subtotal),
+                            // Nominal yang tampil adalah total SETELAH diskon,
+                            // yaitu jumlah yang harus dibayar pembeli.
+                            formatRupiah(state.totalAmount),
                             style: theme.textTheme.titleMedium?.copyWith(
                               color: colorScheme.primary,
                               fontWeight: FontWeight.bold,
